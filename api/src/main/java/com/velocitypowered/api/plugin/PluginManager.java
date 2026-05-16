@@ -59,6 +59,14 @@ public interface PluginManager {
   void addToClasspath(Object plugin, Path path);
 
   /**
+   * Get the {@link PluginDescription} of all plugins that have failed to load.
+   *
+   * @return an {@link Collection} of all the plugins that have failed
+   *         to load during init
+   */
+  Collection<PluginDescription> getFailedPlugins();
+
+  /**
    * Ensures a plugin container exists for the given {@code plugin}.
    *
    * @param plugin the instance to look up the container for

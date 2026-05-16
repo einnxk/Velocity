@@ -47,6 +47,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
@@ -201,6 +202,7 @@ public final class VelocityCommand {
       final CommandSource source = context.getSource();
 
       final List<PluginContainer> plugins = List.copyOf(server.getPluginManager().getPlugins());
+      final Collection<PluginDescription> failedPlugins = server.getPluginManager().getFailedPlugins();
       final int pluginCount = plugins.size();
 
       if (pluginCount == 0) {
@@ -210,45 +212,52 @@ public final class VelocityCommand {
       }
 
       final TextComponent.Builder listBuilder = Component.text();
-      for (int i = 0; i < pluginCount; i++) {
-        final PluginContainer plugin = plugins.get(i);
-        listBuilder.append(componentForPlugin(plugin.getDescription()));
-        if (i + 1 < pluginCount) {
+      final List<PluginContainer> pluginList = new ArrayList<>(plugins);
+      for (int i = 0; i < pluginList.size(); i++) {
+        listBuilder.append(componentForPlugin(pluginList.get(i).getDescription(), true));
+        if (i + 1 < pluginList.size() || !failedPlugins.isEmpty()) {
+          listBuilder.append(Component.text(", "));
+        }
+      }
+      final List<PluginDescription> failedList = new ArrayList<>(failedPlugins);
+      for (int i = 0; i < failedList.size(); i++) {
+        listBuilder.append(componentForPlugin(failedList.get(i), false));
+        if (i + 1 < failedList.size()) {
           listBuilder.append(Component.text(", "));
         }
       }
 
       final TranslatableComponent output = Component.translatable()
-          .key("velocity.command.plugins-list")
-          .color(NamedTextColor.YELLOW)
-          .arguments(Argument.component("plugins", listBuilder.build()))
-          .build();
+              .key("velocity.command.plugins-list")
+              .color(NamedTextColor.YELLOW)
+              .arguments(Argument.component("plugins", listBuilder.build()))
+              .build();
       source.sendMessage(output);
       return Command.SINGLE_SUCCESS;
     }
 
-    private TextComponent componentForPlugin(PluginDescription description) {
+    private TextComponent componentForPlugin(PluginDescription description, boolean enabled) {
       final String pluginInfo = description.getName().orElse(description.getId())
-          + description.getVersion().map(v -> " " + v).orElse("");
+              + description.getVersion().map(v -> " " + v).orElse("");
 
       final TextComponent.Builder hoverText = Component.text().content(pluginInfo);
 
       description.getUrl().ifPresent(url -> {
         hoverText.append(Component.newline());
         hoverText.append(Component.translatable(
-            "velocity.command.plugin-tooltip-website",
-            Argument.component("url", Component.text(url))));
+                "velocity.command.plugin-tooltip-website",
+                Argument.component("url", Component.text(url))));
       });
       if (!description.getAuthors().isEmpty()) {
         hoverText.append(Component.newline());
         if (description.getAuthors().size() == 1) {
           hoverText.append(Component.translatable("velocity.command.plugin-tooltip-author",
-              Component.text(description.getAuthors().getFirst())));
+                  Component.text(description.getAuthors().getFirst())));
         } else {
           hoverText.append(
-              Component.translatable("velocity.command.plugin-tooltip-author",
-                  Argument.string("authors", String.join(", ", description.getAuthors()))
-              )
+                  Component.translatable("velocity.command.plugin-tooltip-author",
+                          Argument.string("authors", String.join(", ", description.getAuthors()))
+                  )
           );
         }
       }
@@ -260,7 +269,7 @@ public final class VelocityCommand {
 
       return Component.text()
               .content(description.getId())
-              .color(NamedTextColor.GRAY)
+              .color(enabled ? NamedTextColor.GREEN : NamedTextColor.RED)
               .hoverEvent(HoverEvent.showText(hoverText.build()))
               .build();
     }

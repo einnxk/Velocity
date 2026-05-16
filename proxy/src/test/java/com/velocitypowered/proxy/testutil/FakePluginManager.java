@@ -25,6 +25,7 @@ import com.velocitypowered.api.plugin.PluginManager;
 import com.velocitypowered.proxy.plugin.virtual.VelocityVirtualPlugin;
 import java.nio.file.Path;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -83,6 +84,11 @@ public class FakePluginManager implements PluginManager {
   @Override
   public void addToClasspath(@NonNull Object plugin, @NonNull Path path) {
     throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public Collection<PluginDescription> getFailedPlugins() {
+    return List.of();
   }
 
   public void shutdown() {

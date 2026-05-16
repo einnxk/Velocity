@@ -62,6 +62,7 @@ public class VelocityPluginManager implements PluginManager {
 
   private final Map<String, PluginContainer> pluginsById = new LinkedHashMap<>();
   private final Map<Object, PluginContainer> pluginInstances = new IdentityHashMap<>();
+  private final Map<String, PluginDescription> failedPluginsById = new LinkedHashMap<>();
   private final VelocityServer server;
 
   public VelocityPluginManager(VelocityServer server) {
@@ -135,6 +136,7 @@ public class VelocityPluginManager implements PluginManager {
         if (!dependency.isOptional() && !loadedCandidates.containsKey(dependency.getId())) {
           logger.error("Can't load plugin {} due to missing dependency {}", candidate.getId(),
               dependency.getId());
+          failedPluginsById.put(candidate.getId(), candidate);
           continue pluginLoad;
         }
       }
@@ -146,6 +148,7 @@ public class VelocityPluginManager implements PluginManager {
         loadedCandidates.put(realPlugin.getId(), realPlugin);
       } catch (Throwable e) {
         logger.error("Can't create module for plugin {}", candidate.getId(), e);
+        failedPluginsById.put(candidate.getId(), candidate);
       }
     }
 
@@ -173,6 +176,7 @@ public class VelocityPluginManager implements PluginManager {
         loader.createPlugin(container, plugin.getValue(), commonModule);
       } catch (Throwable e) {
         logger.error("Can't create plugin {}", description.getId(), e);
+        failedPluginsById.put(description.getId(), description);
         continue;
       }
 
@@ -225,5 +229,10 @@ public class VelocityPluginManager implements PluginManager {
       throw new UnsupportedOperationException(
           "Operation is not supported on non-Java Velocity plugins.");
     }
+  }
+
+  @Override
+  public Collection<PluginDescription> getFailedPlugins() {
+    return Collections.unmodifiableCollection(failedPluginsById.values());
   }
 }
