@@ -42,7 +42,7 @@ public final class BossBarManager {
    * Records the specified boss bar to be re-sent when a player changes server, and sends the update packet
    * if the client is able to receive it and not be disconnected.
    */
-  public synchronized void writeUpdate(VelocityBossBarImplementation bar, BossBarPacket packet) {
+  public void writeUpdate(VelocityBossBarImplementation bar, BossBarPacket packet) {
     this.bossBars.add(bar);
     if (!this.dropPackets) {
       this.player.getConnection().write(packet);
@@ -52,7 +52,7 @@ public final class BossBarManager {
   /**
    * Removes the specified boss bar from the player to ensure it is not re-sent.
    */
-  public synchronized void remove(VelocityBossBarImplementation bar, BossBarPacket packet) {
+  public void remove(VelocityBossBarImplementation bar, BossBarPacket packet) {
     this.bossBars.remove(bar);
     if (!this.dropPackets) {
       this.player.getConnection().write(packet);
@@ -63,7 +63,7 @@ public final class BossBarManager {
    * Re-creates the boss bars the player can see with any updates that may have occurred in the meantime,
    * and allows update packets for those boss bars to be sent.
    */
-  public synchronized void sendBossBars() {
+  public void sendBossBars() {
     for (VelocityBossBarImplementation bossBar : bossBars) {
       bossBar.createDirect(player);
     }
@@ -73,7 +73,7 @@ public final class BossBarManager {
   /**
    * Prevents the player from receiving boss bar update packets while logging in to a new server.
    */
-  public synchronized void dropPackets() {
+  public void dropPackets() {
     this.dropPackets = true;
   }
 }
