@@ -234,7 +234,7 @@ public class MinecraftConnection extends ChannelInboundHandlerAdapter {
   @Nullable
   public ChannelFuture write(Object msg) {
     if (channel.isActive()) {
-      return channel.writeAndFlush(msg, channel.newPromise());
+      return channel.writeAndFlush(msg, channel.voidPromise());
     } else {
       ReferenceCountUtil.release(msg);
       return null;

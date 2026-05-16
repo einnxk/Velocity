@@ -79,13 +79,14 @@ import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
 import io.netty.util.ReferenceCountUtil;
 import java.time.Instant;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.ComponentLike;
@@ -106,8 +107,8 @@ public class ClientPlaySessionHandler implements MinecraftSessionHandler {
 
   private final ConnectedPlayer player;
   private boolean spawned = false;
-  private final List<UUID> serverBossBars = new ArrayList<>();
-  private final Queue<PluginMessagePacket> loginPluginMessages = new ConcurrentLinkedQueue<>();
+  private final List<UUID> serverBossBars = Collections.synchronizedList(new ArrayList<>());
+  private final Queue<PluginMessagePacket> loginPluginMessages = new ArrayDeque<>();
   private final VelocityServer server;
   private @Nullable TabCompleteRequestPacket outstandingTabComplete;
   private final ChatHandler<? extends MinecraftPacket> chatHandler;
@@ -562,12 +563,17 @@ public class ClientPlaySessionHandler implements MinecraftSessionHandler {
       // Config state clears everything in the client. No need to clear later.
       spawned = false;
       player.clearPlayerListHeaderAndFooterSilent();
-      player.getTabList().clearAllSilent();
-      if (player.getProtocolVersion().noLessThan(ProtocolVersion.MINECRAFT_1_20_2)) {
-        player.getBossBarManager().dropPackets();
-      } else {
-        serverBossBars.clear();
-      }
+
+      CompletableFuture.runAsync(() -> {
+        player.getTabList().clearAllSilent();
+        if (player.getProtocolVersion().noLessThan(ProtocolVersion.MINECRAFT_1_20_2)) {
+          player.getBossBarManager().dropPackets();
+        } else {
+          synchronized (serverBossBars) {
+            serverBossBars.clear();
+          }
+        }
+      }, player.getConnection().eventLoop());
     }
 
     player.switchToConfigState();
