@@ -31,6 +31,8 @@ import io.netty.util.concurrent.Promise;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
@@ -46,6 +48,7 @@ public final class SeparatePoolInetNameResolver extends InetNameResolver {
   private final ExecutorService resolveExecutor;
   private final InetNameResolver delegate;
   private final Cache<String, List<InetAddress>> cache;
+  private final ConcurrentHashMap<String, CompletableFuture<List<InetAddress>>> pendingLookups;
   private AddressResolverGroup<InetSocketAddress> resolverGroup;
 
   /**
@@ -56,7 +59,8 @@ public final class SeparatePoolInetNameResolver extends InetNameResolver {
    */
   public SeparatePoolInetNameResolver(EventExecutor executor) {
     super(executor);
-    this.resolveExecutor = Executors.newSingleThreadExecutor(
+    this.resolveExecutor = Executors.newFixedThreadPool(
+        Math.max(4, Runtime.getRuntime().availableProcessors()),
         new ThreadFactoryBuilder()
             .setNameFormat("Velocity DNS Resolver")
             .setDaemon(true)
@@ -65,6 +69,7 @@ public final class SeparatePoolInetNameResolver extends InetNameResolver {
     this.cache = Caffeine.newBuilder()
         .expireAfterWrite(30, TimeUnit.SECONDS)
         .build();
+    this.pendingLookups = new ConcurrentHashMap<>();
   }
 
   @Override
@@ -75,37 +80,92 @@ public final class SeparatePoolInetNameResolver extends InetNameResolver {
       return;
     }
 
+    CompletableFuture<List<InetAddress>> existing = pendingLookups.get(inetHost);
+    if (existing != null) {
+      existing.whenComplete((result, ex) -> {
+        if (ex != null) {
+          promise.tryFailure(ex);
+        } else {
+          promise.trySuccess(result.getFirst());
+        }
+      });
+      return;
+    }
+
+    CompletableFuture<List<InetAddress>> future = new CompletableFuture<>();
+    pendingLookups.put(inetHost, future);
+
     try {
       resolveExecutor.execute(() -> {
-        promise.addListener(future -> {
-          if (future.isSuccess()) {
-            cache.put(inetHost, ImmutableList.of((InetAddress) future.getNow()));
+        Promise<InetAddress> delegatePromise = executor().newPromise();
+        delegatePromise.addListener(f -> {
+          if (f.isSuccess()) {
+            InetAddress result = (InetAddress) f.getNow();
+            List<InetAddress> asList = ImmutableList.of(result);
+            cache.put(inetHost, asList);
+            pendingLookups.remove(inetHost);
+            future.complete(asList);
+            promise.trySuccess(result);
+          } else {
+            pendingLookups.remove(inetHost);
+            future.completeExceptionally(f.cause());
+            promise.tryFailure(f.cause());
           }
         });
-        this.delegate.resolve(inetHost, promise);
+        this.delegate.resolve(inetHost, delegatePromise);
       });
     } catch (RejectedExecutionException e) {
+      pendingLookups.remove(inetHost);
+      future.completeExceptionally(e);
       promise.setFailure(e);
     }
   }
 
   @Override
   protected void doResolveAll(String inetHost, Promise<List<InetAddress>> promise)
-      throws Exception {
+          throws Exception {
     List<InetAddress> addresses = cache.getIfPresent(inetHost);
     if (addresses != null) {
       promise.trySuccess(addresses);
       return;
     }
 
-    try {
-      promise.addListener(future -> {
-        if (future.isSuccess()) {
-          cache.put(inetHost, (List<InetAddress>) future.getNow());
+    CompletableFuture<List<InetAddress>> existing = pendingLookups.get(inetHost);
+    if (existing != null) {
+      existing.whenComplete((result, ex) -> {
+        if (ex != null) {
+          promise.tryFailure(ex);
+        } else {
+          promise.trySuccess(result);
         }
       });
-      resolveExecutor.execute(() -> this.delegate.resolveAll(inetHost, promise));
+      return;
+    }
+
+    CompletableFuture<List<InetAddress>> future = new CompletableFuture<>();
+    pendingLookups.put(inetHost, future);
+
+    try {
+      resolveExecutor.execute(() -> {
+        Promise<List<InetAddress>> delegatePromise = executor().newPromise();
+        delegatePromise.addListener(f -> {
+          if (f.isSuccess()) {
+            List<InetAddress> result = (List<InetAddress>) f.getNow();
+            cache.put(inetHost, result);
+            pendingLookups.remove(inetHost);
+            future.complete(result);
+            promise.trySuccess(result);
+          } else {
+            pendingLookups.remove(inetHost);
+            future.completeExceptionally(f.cause());
+            promise.tryFailure(f.cause());
+          }
+        });
+        this.delegate.resolveAll(inetHost, delegatePromise);
+      });
     } catch (RejectedExecutionException e) {
+      pendingLookups.remove(inetHost);
+      future.completeExceptionally(e);
       promise.setFailure(e);
     }
   }
