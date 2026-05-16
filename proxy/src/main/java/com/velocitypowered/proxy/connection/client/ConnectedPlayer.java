@@ -884,13 +884,11 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
    * @return the next server to try
    */
   private Optional<RegisteredServer> getNextServerToTry(@Nullable RegisteredServer current) {
-    if (serversToTry == null) {
-      String virtualHostStr = getVirtualHost().map(InetSocketAddress::getHostString)
-          .orElse("")
-          .toLowerCase(Locale.ROOT);
-      serversToTry = server.getConfiguration().getForcedHosts().getOrDefault(virtualHostStr,
-          Collections.emptyList());
-    }
+    String virtualHostStr = getVirtualHost().map(InetSocketAddress::getHostString)
+            .orElse("")
+            .toLowerCase(Locale.ROOT);
+    serversToTry = server.getConfiguration().getForcedHosts()
+            .getOrDefault(virtualHostStr, Collections.emptyList());
 
     if (serversToTry.isEmpty()) {
       List<String> connOrder = server.getConfiguration().getAttemptConnectionOrder();
@@ -901,17 +899,30 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
       }
     }
 
-    for (int i = tryIndex; i < serversToTry.size(); i++) {
+    for (int i = 0; i < serversToTry.size(); i++) {
       String toTryName = serversToTry.get(i);
-      if ((connectedServer != null && hasSameName(connectedServer.getServer(), toTryName))
-          || (connectionInFlight != null && hasSameName(connectionInFlight.getServer(), toTryName))
-          || (current != null && hasSameName(current, toTryName))) {
+
+      if (current != null && hasSameName(current, toTryName)) {
         continue;
       }
 
-      tryIndex = i;
-      return server.getServer(toTryName);
+      if (connectedServer != null && hasSameName(connectedServer.getServer(), toTryName)) {
+        continue;
+      }
+
+      if (connectionInFlight != null && hasSameName(connectionInFlight.getServer(), toTryName)) {
+        continue;
+      }
+
+      Optional<RegisteredServer> candidate = server.getServer(toTryName);
+      if (candidate.isEmpty()) {
+        logger.warn("Server {} is in the fallback list but not registered, skipping", toTryName);
+        continue;
+      }
+
+      return candidate;
     }
+
     return Optional.empty();
   }
 
@@ -926,7 +937,6 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
    */
   public void setConnectedServer(@Nullable VelocityServerConnection serverConnection) {
     this.connectedServer = serverConnection;
-    this.tryIndex = 0; // reset since we got connected to a server
 
     if (serverConnection == connectionInFlight) {
       connectionInFlight = null;
