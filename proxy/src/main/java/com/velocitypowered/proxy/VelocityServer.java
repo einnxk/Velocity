@@ -878,4 +878,8 @@ public class VelocityServer implements ProxyServer, ForwardingAudience {
   public ResourcePackInfo.Builder createResourcePackBuilder(String url) {
     return new VelocityResourcePackInfo.BuilderImpl(url);
   }
+
+  public Bootstrap createBackendBootstrap() {
+    return this.cm.createWorker(this.cm.getBackendGroup());
+  }
 }

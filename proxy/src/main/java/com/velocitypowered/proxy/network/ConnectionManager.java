@@ -58,6 +58,7 @@ public final class ConnectionManager {
   private final TransportType transportType;
   private final EventLoopGroup bossGroup;
   private final EventLoopGroup workerGroup;
+  private final EventLoopGroup backendGroup;
   private final VelocityServer server;
   // These are intentionally made public for plugins like ViaVersion, which inject their own
   // protocol logic into the proxy.
@@ -78,6 +79,7 @@ public final class ConnectionManager {
     this.transportType = TransportType.bestType();
     this.bossGroup = this.transportType.createEventLoopGroup(TransportType.Type.BOSS);
     this.workerGroup = this.transportType.createEventLoopGroup(TransportType.Type.WORKER);
+    this.backendGroup = this.transportType.createEventLoopGroup(TransportType.Type.WORKER);
     this.serverChannelInitializer = new ServerChannelInitializerHolder(
         new ServerChannelInitializer(this.server));
     this.backendChannelInitializer = new BackendChannelInitializerHolder(
@@ -265,10 +267,15 @@ public final class ConnectionManager {
     this.closeEndpoints(true);
 
     this.resolver.shutdown();
+    this.backendGroup.shutdownGracefully();
   }
 
   public EventLoopGroup getBossGroup() {
     return bossGroup;
+  }
+
+  public EventLoopGroup getBackendGroup() {
+    return backendGroup;
   }
 
   public ServerChannelInitializerHolder getServerChannelInitializer() {
