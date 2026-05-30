@@ -87,7 +87,9 @@ import java.util.List;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.ComponentLike;
@@ -118,6 +120,9 @@ public class ClientPlaySessionHandler implements MinecraftSessionHandler {
   private boolean spawned = false;
   private final List<UUID> serverBossBars = Collections.synchronizedList(new ArrayList<>());
   private final Queue<PluginMessagePacket> loginPluginMessages = new ArrayDeque<>();
+  private final AtomicLong loginPluginMessagesBytes = new AtomicLong();
+  private final AtomicInteger loginPluginMessagesCount = new AtomicInteger();
+  private volatile boolean loginPluginMessagesOverflowed;
   private final VelocityServer server;
   private @Nullable TabCompleteRequestPacket outstandingTabComplete;
   private final ChatHandler<? extends MinecraftPacket> chatHandler;
