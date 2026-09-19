@@ -18,7 +18,6 @@
 package com.velocitypowered.proxy.tablist;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Maps;
 import com.velocitypowered.api.network.ProtocolVersion;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.player.ChatSession;
@@ -31,9 +30,9 @@ import com.velocitypowered.proxy.protocol.packet.RemovePlayerInfoPacket;
 import com.velocitypowered.proxy.protocol.packet.UpsertPlayerInfoPacket;
 import com.velocitypowered.proxy.protocol.packet.chat.ComponentHolder;
 import com.velocitypowered.proxy.protocol.packet.chat.RemoteChatSession;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -62,7 +61,7 @@ public class VelocityTabList implements InternalTabList {
   public VelocityTabList(ConnectedPlayer player) {
     this.player = player;
     this.connection = player.getConnection();
-    this.entries = Maps.newConcurrentMap();
+    this.entries = new HashMap<>();
   }
 
   @Override
@@ -193,7 +192,7 @@ public class VelocityTabList implements InternalTabList {
 
   @Override
   public Optional<TabListEntry> removeEntry(UUID uuid) {
-    this.connection.write(new RemovePlayerInfoPacket(List.of(uuid)));
+    this.connection.delayedWrite(new RemovePlayerInfoPacket(List.of(uuid)));
     return Optional.ofNullable(this.entries.remove(uuid));
   }
 
@@ -214,9 +213,13 @@ public class VelocityTabList implements InternalTabList {
 
   @Override
   public void clearAll() {
+    if (this.entries.isEmpty()) {
+      return;
+    }
+
     this.connection.delayedWrite(new RemovePlayerInfoPacket(
-            new ArrayList<>(this.entries.keySet())));
-    clearAllSilent();
+            List.copyOf(this.entries.keySet())));
+    this.entries.clear();
   }
 
   @Override
